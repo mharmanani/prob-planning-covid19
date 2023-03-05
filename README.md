@@ -15,6 +15,9 @@ infections that are likely to occur in shared spaces, and that they are capable 
 spread of the disease
 
 ## File Structure
-- `models/` contains the domains and planners modelling the problem
-- `script/` contains utlity scripts, data analyses, and other useful logic used to supplement the work done by the planners
-- `data/` contains benchmark datasets used to compare the performance of our planners
+```
+data: contains benchmark datasets used to compare the performance of our planners
+src
+|_ models: contains the domains and planners modelling the problem
+|_ script: contains utlity scripts, data analyses, and other useful logic used to supplement the work done by the planners
+```
