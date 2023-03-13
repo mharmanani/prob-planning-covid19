@@ -1,0 +1,34 @@
+non-fluents nf_covid_inst_mdp__1 {
+	
+    domain = covid_mdp;
+	
+    objects {
+        person : {p1, p2, p3, p4};
+        //direction : {left, right, up, down, none};
+	};
+	
+    non-fluents {
+        POPULATION = 4;
+
+        GRID-SIZE-X = 4;
+        GRID-SIZE-Y = 4;
+	};
+}
+
+instance covid_inst_mdp__1 {
+	domain = covid_mdp;
+	non-fluents = nf_covid_inst_mdp__1;
+	
+    init-state {
+		infected(p1); susceptible(p2); susceptible(p3); susceptible(p4);
+        xPos(p1) = 0; yPos(p1) = 0;
+        xPos(p2) = 1; yPos(p2) = 0;
+        xPos(p3) = 3; yPos(p3) = 3;
+        xPos(p4) = 2; yPos(p4) = 3;
+	};
+
+    max-nondef-actions = 20;
+	horizon  = 400;
+	discount = 1.0;
+
+}

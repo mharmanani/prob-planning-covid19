@@ -1,0 +1,144 @@
+domain covid_mdp {
+
+	types {
+        person: object;
+        //direction : {@up, @down, @left, @right, @none};
+        cell: object;
+	};
+
+    pvariables {
+
+        // Action costs and penalties
+		COST-MASK              : {non-fluent, real, default = -1 }; 
+        COST-VACCINE           : {non-fluent, real, default = -5 }; 
+        COST-ISOLATION         : {non-fluent, real, default = -100 }; 
+		PENALTY-INFECTED       : {non-fluent, real, default = -1 };  
+		PENALTY-DEATH          : {non-fluent, real, default = -8 };
+
+        GRID-SIZE-X : { non-fluent, int, default = 4 };
+		GRID-SIZE-Y : { non-fluent, int, default = 4 };
+        POPULATION  : { non-fluent, int, default = 5 }; 
+        
+        K     : {non-fluent, real, default =   1 };
+        L     : {non-fluent, real, default =   1 };
+        BETA  : {non-fluent, real, default =   1 };
+        SIGMA : {non-fluent, real, default =   1 };
+        GAMMA : {non-fluent, real, default =   1 }; 
+
+        MASK-SELF-PROT-FACTOR : { non-fluent, real, default =   0.80 }; 
+        MASK-OTHR-PROT-FACTOR : { non-fluent, real, default =   0.60 }; 
+        VACCINE-PROT-FACTOR   : { non-fluent, real, default =   0.13 }; 
+        NAT-IMM-PROT-FACTOR   : { non-fluent, real, default =   0.30 }; 
+        PROB-MASK-COMPLIANCE  : { non-fluent, real, default =   0.96 };
+        PROB-VAX-COMPLIANCE   : { non-fluent, real, default =   0.93 };
+
+        LEFT-ENCODING  : { non-fluent, real, default =  -9.982 };
+        RIGHT-ENCODING : { non-fluent, real, default =   9.982 };
+        UP-ENCODING    : { non-fluent, real, default =   7.119 };
+        DOWN-ENCODING  : { non-fluent, real, default =  -7.119 };
+        NONE-ENCODING  : { non-fluent, real, default =  -0.006 };
+
+        //WALL(int, int)  : {non-fluent, bool, default = false }; 
+        //FLOOR(int, int) : {non-fluent, bool, default = false };
+
+        //coordinates of the people
+		xPos(person) : { state-fluent, int, default = 0};
+		yPos(person) : { state-fluent, int, default = 0};
+       
+        // intervention outcomes
+        masked(person)   : { state-fluent, bool, default = false};
+        vaxxed(person)   : { state-fluent, bool, default = false};
+
+        masked_neighbours(person)   : { state-fluent, int, default = 0};
+        infected_neighbours(person) : { state-fluent, int, default = 0};
+        
+        // SEIRD fluents
+        susceptible(person) : { state-fluent, bool, default = true};
+        exposed(person)     : { state-fluent, bool, default = false};
+        infected(person)    : { state-fluent, bool, default = false};
+        recovered(person)   : { state-fluent, bool, default = false};
+        deceased(person)    : { state-fluent, bool, default = false};
+
+        // Interventions
+        mask(person)      : { action-fluent, bool, default = false};
+        vaccinate(person) : { action-fluent, bool, default = false};
+
+    };
+
+    cpfs {
+
+        //update xpos unless there was a conflict (stays the same)
+		xPos'(?p) = if (Bernoulli(0.5))
+            then [if (xPos(?p) -1 < 0)
+                then xPos(?p) 
+                else (xPos(?p) -1)]
+            else [if (xPos(?p) +1 < 0) 
+                then xPos(?p) 
+                else (xPos(?p) +1)];
+
+		//update ypos unless there was a conflict (stays the same)
+		yPos'(?p) =  if (Bernoulli(0.5))
+            then [if (yPos(?p) -1 < 0)
+                then yPos(?p) 
+                else (yPos(?p) -1)]
+            else [if (yPos(?p) +1 < 0) 
+                then yPos(?p) 
+                else (yPos(?p) +1)];
+
+        // Count the number of infected neighbours 
+        infected_neighbours'(?p) = sum_{?p2 : person} [
+            ((xPos(?p2) - xPos(?p) <= K) | (xPos(?p) - xPos(?p2) <= K)) 
+            ^ ((yPos(?p2) - yPos(?p) <= K) | (yPos(?p) - yPos(?p2) <= K)) 
+            ^ infected(?p2)
+        ];
+
+        // Count the number of infected + masked neighbours 
+        masked_neighbours'(?p) = sum_{?p2 : person} [
+            ((xPos(?p2) - xPos(?p) <= K) | (xPos(?p) - xPos(?p2) <= K)) 
+            ^ ((yPos(?p2) - yPos(?p) <= K) | (yPos(?p) - yPos(?p2) <= K)) 
+            ^ infected(?p2) ^ masked(?p2)
+        ];
+
+        exposed'(?p) = if ((infected_neighbours(?p)) > 0) then [
+            if (susceptible(?p) ^ (~masked(?p)) ^ (~vaxxed(?p))) then 
+                Bernoulli(BETA/(4*K*L) * (infected_neighbours(?p) - MASK-OTHR-PROT-FACTOR*masked_neighbours(?p)))
+            else if (susceptible(?p) ^ (masked(?p)) ^ (~vaxxed(?p))) then
+                Bernoulli((BETA/(4*K*L) * MASK-SELF-PROT-FACTOR * (infected_neighbours(?p) - MASK-OTHR-PROT-FACTOR*masked_neighbours(?p))))
+            else if (susceptible(?p) ^ vaxxed(?p)) then
+                Bernoulli(BETA/(4*K*L) * VACCINE-PROT-FACTOR * infected_neighbours(?p))
+            else if (recovered(?p)) then
+                Bernoulli(BETA/(4*K*L) * NAT-IMM-PROT-FACTOR * infected_neighbours(?p))
+            else true
+            ] 
+            else [
+                if (~exposed(?p)) then false
+                else true 
+            ];
+
+        susceptible'(?p) = if (susceptible(?p)) then true else false;
+
+        infected'(?p) = if (exposed(?p)) then Bernoulli(SIGMA) 
+            else if (infected(?p)) then true
+            else false;
+
+        recovered'(?p) = if (infected(?p)) then Bernoulli(GAMMA)
+            else if (recovered(?p)) then true
+            else false;
+
+        deceased'(?p) = if (infected(?p)) then Bernoulli(1 - GAMMA)
+            else if (deceased(?p)) then true
+            else false;
+
+        masked'(?p) = if (masked(?p)) then true else false;
+
+        vaxxed'(?p) = if (vaxxed(?p)) then true else false;
+    };
+
+    reward = 
+        [sum_{?p : person} [ PENALTY-INFECTED * infected(?p) ]]
+      + [sum_{?p : person} [ PENALTY-DEATH * deceased(?p) ]];
+
+    //state-action-constraints {
+    //    forall_{?p : person} [(xPos(?p) >= 0) ^ (yPos(?p) >=0) ^ (xPos(?p) < GRID-SIZE-X) ^ (yPos(?p) < GRID-SIZE-Y)];
+    //};
+}
