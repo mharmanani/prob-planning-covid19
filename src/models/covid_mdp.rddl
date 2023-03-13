@@ -129,9 +129,13 @@ domain covid_mdp {
             else if (deceased(?p)) then true
             else false;
 
-        masked'(?p) = if (masked(?p)) then true else false;
+        masked'(?p) = if (mask(?p)) then true 
+            else if (masked(?p)) then true
+            else false;
 
-        vaxxed'(?p) = if (vaxxed(?p)) then true else false;
+        vaxxed'(?p) = if (vaccinate(?p)) then true 
+            else if (vaxxed(?p)) then true
+            else false;
     };
 
     reward = 
